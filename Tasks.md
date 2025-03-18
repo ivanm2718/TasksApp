@@ -25,3 +25,20 @@ Step 4: Update a Task
 ---
 In the editTask function, populate the updatedTask object with the data of the task being edited.
 In the saveUpdatedTask function, update the task in the tasks array with the data from updatedTask.
+
+
+
+explanation:
+How does Vue.js work here?
+
+Two-way data binding (v-model)
+v-model="newTask.name" ensures that input in the field automatically updates the value of the newTask.name variable.
+
+Conditional rendering (v-if)
+v-if="showTaskForm" displays the form only when showTaskForm is set to true.
+
+Looping through the list (v-for)
+v-for="(task, index) in tasks" dynamically generates the task list.
+
+Reactivity (ref())
+Vue automatically updates the displayed content when the value of a variable (e.g., tasks) changes.
