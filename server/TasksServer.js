@@ -1,4 +1,5 @@
-// Import module 'pg' for working with PostgreSQL
+require('dotenv').config(); 
+
 const { Pool } = require('pg');
 const express = require('express');
 const cors = require('cors');
@@ -9,13 +10,13 @@ const port = 3000; //app access port, not to be confused with db port
 app.use(cors());
 app.use(express.json());
 
-// config connection with database
+// config connection with database with data from dotenv file 
 const pool = new Pool({
-  user: 'postgres',    // username for database
-  host: 'localhost',   // local server
-  database: 'taskmanager_db',// name of database you created
-  password: "1234", // pass
-  port: 5432,          // standard port for PostgreSQL
+  user: process.env.DB_USER,  
+  host: process.env.DB_HOST,  
+  database: process.env.DB_NAME, 
+  password: process.env.DB_PASSWORD, 
+  port: process.env.DB_PORT,          
 });
 
 // test connection
@@ -30,7 +31,7 @@ app.listen(port, () => {
 });
 
 
-// GET /tasks/?user_id=1
+// GET /tasks, with optional ?completed and ?user_id queries
 app.get('/tasks', async (req, res) => {
   try {
       const {completed, user_id} = req.query;
@@ -38,6 +39,7 @@ app.get('/tasks', async (req, res) => {
       let parameters = [];
       let paramIndex = 1;
 
+      //if ?user_id query is present
       if(user_id)
       {
             query +=  ` WHERE user_id = $${paramIndex}`;
@@ -45,6 +47,7 @@ app.get('/tasks', async (req, res) => {
             paramIndex++;
       }
 
+      //if ?completed query is present
       if(completed !== undefined)
       {
           if(paramIndex == 1)
@@ -67,14 +70,20 @@ app.get('/tasks', async (req, res) => {
   // POST - Create a new task (POST /tasks)
 app.post('/tasks', async (req, res) => {
     const { name, completed, user_id } = req.body;
+    
+    // Validate only the name (required and non-empty string)
+    if (!name || name.trim() === '') {
+        return res.status(400).json({ error: 'Task name is required' });
+    }
+
     try {
-      const { rows } = await pool.query(
-        'INSERT INTO tasks (name, completed, user_id) VALUES ($1, $2, $3) RETURNING *',
-        [name, completed, user_id]
-      );
-      res.status(201).json(rows[0]);
+        const { rows } = await pool.query(
+            'INSERT INTO tasks (name, completed, user_id) VALUES ($1, $2, $3) RETURNING *',
+            [name.trim(), completed, user_id]
+        );
+        res.status(201).json(rows[0]);
     } catch (err) {
-      res.status(500).json({ error: 'Failed to create task' });
+        res.status(500).json({ error: 'Failed to create task' });
     }
 });
 
@@ -83,6 +92,12 @@ app.post('/tasks', async (req, res) => {
 app.put('/tasks/:id', async (req, res) => {
   const { id } = req.params;
   const { name, completed, user_id } = req.body;
+  
+  // Validate that name is not empty
+  if (!name || name.trim() === '') {
+    return res.status(400).json({ error: 'Task name cannot be empty' });
+  }
+
   try {
     const { rows } = await pool.query(
       'UPDATE tasks SET name = $1, completed = $2, user_id = $3 WHERE id = $4 RETURNING *',
@@ -110,7 +125,6 @@ app.delete('/tasks/:id', async (req, res) => {
     res.status(500).json({ error: 'Failed to delete task' });
   }
 });
-
 
 
 

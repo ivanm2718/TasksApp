@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task List with Vue.js</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="https://unpkg.com/vue@3"></script>
+</head>
+<body>
+    <div id="app">
+        <button class="task-button new-task" @click="toggleTaskForm">+ Add New Task</button> 
+
+        <!-- Form for adding a new task -->
+        <div v-if="showTaskForm" class="task-form">
+            <input type="text" v-model="newTask.name" placeholder="Task Name">
+            <button @click="addTask">Save Task</button>
+        </div>
+
+        <!-- Filter controls -->
+        <div class="filter-controls">
+            <label>
+                Show only uncompleted tasks:
+                <button class="filter-toggle" @click="toggleShowUncompleted">
+                    {{ showOnlyUncompleted ? 'ON' : 'OFF' }}
+                </button>
+            </label>
+        </div>
+
+        <!-- List of tasks to display -->
+        <ul class="task-list">
+            <li v-for="(task, index) in filteredTasks" :key="task.id" :class="{ completed: task.completed }">
+                <span class="task-name">{{ task.name }}</span>
+                <div class="task-actions">
+                    <button class="task-button" @click="toggleTaskStatus(task.id)">
+                        {{ task.completed ? 'Mark as Uncompleted' : 'Mark as Completed' }}
+                    </button>
+                    <button class="task-button" @click="toggleEditForm(task.id)">Update</button>
+                    <button class="task-button delete" @click="deleteTask(task.id)">Delete</button>
+                </div>
+            </li>
+        </ul>
+
+        <!-- Form for updating tasks -->
+        <div v-if="showUpdateForm" class="task-form">
+            <input type="text" v-model="updatedTask.name" placeholder="Task Name">
+            <button @click="saveUpdatedTask">Save Update</button>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, computed } = Vue;
+
+        createApp({
+            setup() {
+                const tasks = ref([]);
+                const showTaskForm = ref(false);
+                const showUpdateForm = ref(false);
+                const showOnlyUncompleted = ref(false);
+                const newTask = ref({ name: '', completed: false });
+                const updatedTask = ref({ name: '', completed: false });
+                const currentTaskId = ref(null);
+
+                // Computed property for filtered tasks (now shows uncompleted when filter is ON)
+                const filteredTasks = computed(() => {
+                    if (showOnlyUncompleted.value) {
+                        return tasks.value.filter(task => !task.completed);
+                    }
+                    return tasks.value;
+                });
+
+                // Fetching tasks from backend
+                const fetchTasks = async () => {
+                    try {
+                        const response = await fetch('http://localhost:3000/tasks');
+                        tasks.value = await response.json();
+                    } catch (error) {
+                        console.error('Error fetching tasks:', error);
+                    }
+                };
+
+                // Toggle task form visibility
+                const toggleTaskForm = () => {
+                    showTaskForm.value = !showTaskForm.value;
+                    if (showTaskForm.value) {
+                        showUpdateForm.value = false;
+                    }
+                };
+
+                // Adding a new task
+                const addTask = async () => {
+                    if (!newTask.value.name) {
+                        showTaskForm.value = false;
+                        return;
+                    }
+                    
+                    try {
+                        const response = await fetch('http://localhost:3000/tasks', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(newTask.value)
+                        });
+                        const data = await response.json();
+                        tasks.value.push(data);
+                        newTask.value = { name: '', completed: false };
+                        showTaskForm.value = false;
+                    } catch (error) {
+                        console.error('Error adding task:', error);
+                    }
+                };
+
+                // Deleting a task
+                const deleteTask = async (id) => {
+                    try {
+                        const response = await fetch(`http://localhost:3000/tasks/${id}`, {
+                            method: 'DELETE'
+                        });
+                        if (response.ok) {
+                            tasks.value = tasks.value.filter(task => task.id !== id);
+                        } else {
+                            console.error('Failed to delete task:', response.statusText);
+                        }
+                    } catch (error) {
+                        console.error('Error deleting task:', error);
+                    }
+                };
+
+                // Change task completion status
+                const toggleTaskStatus = async (id) => {
+                    try {
+                        const task = tasks.value.find(task => task.id === id);
+                        const updatedTask = { ...task, completed: !task.completed };
+
+                        const response = await fetch(`http://localhost:3000/tasks/${id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(updatedTask)
+                        });
+
+                        if (response.ok) {
+                            task.completed = !task.completed;
+                        } else {
+                            console.error('Failed to toggle task status:', response.statusText);
+                        }
+                    } catch (error) {
+                        console.error('Error toggling task status:', error);
+                    }
+                };
+
+                // Toggle edit form visibility
+                const toggleEditForm = (id) => {
+                    if (showUpdateForm.value && currentTaskId.value === id) {
+                        showUpdateForm.value = false;
+                        return;
+                    }
+                    
+                    const task = tasks.value.find(task => task.id === id);
+                    updatedTask.value = { ...task };
+                    currentTaskId.value = id;
+                    showUpdateForm.value = true;
+                    showTaskForm.value = false;
+                };
+
+                const saveUpdatedTask = async () => {
+                    if (!updatedTask.value.name) {
+                        showUpdateForm.value = false;
+                        return;
+                    }
+                    
+                    try {
+                        const response = await fetch(`http://localhost:3000/tasks/${currentTaskId.value}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(updatedTask.value)
+                        });
+
+                        if (response.ok) {
+                            const index = tasks.value.findIndex(task => task.id === currentTaskId.value);
+                            tasks.value[index] = { ...updatedTask.value };
+                            showUpdateForm.value = false;
+                        } else {
+                            console.error('Failed to update task:', response.statusText);
+                        }
+                    } catch (error) {
+                        console.error('Error updating task:', error);
+                    }
+                };
+
+                // Toggle show only uncompleted tasks
+                const toggleShowUncompleted = () => {
+                    showOnlyUncompleted.value = !showOnlyUncompleted.value;
+                };
+
+                // Fetch tasks on page loading
+                fetchTasks();
+
+                return {
+                    tasks,
+                    filteredTasks,
+                    showTaskForm,
+                    showUpdateForm,
+                    showOnlyUncompleted,
+                    newTask,
+                    updatedTask,
+                    toggleTaskForm,
+                    addTask,
+                    deleteTask,
+                    toggleTaskStatus,
+                    toggleEditForm,
+                    saveUpdatedTask,
+                    toggleShowUncompleted
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
