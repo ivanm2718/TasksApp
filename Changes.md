@@ -1,5 +1,5 @@
 1. Added database connection data with password into .env file
-    - make sure you: npm install dotenv
+    - make sure you: npm install 
     - change data if neccessary for your own database
 
 2. Update database specification:
