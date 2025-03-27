@@ -53,16 +53,17 @@ const authenticate = (req, res, next) => {
   }
 };
 
-//const isAdmin = (req, res, next) => {
-  //if (!req.user.isAdmin) {
-    //return res.status(403).json({ error: "Admin access required" });
- // }
- // next();
-//};
+// middleware used to check if user is admin
+const isAdmin = (req, res, next) => {
+   if (!req.user.isAdmin) {
+     return res.status(403).json({ error: "Admin access required" });
+ }
+   next();
+};
 
 // AUTH ROUTES
 app.post('/register', async (req, res) => {
-  const { username, password, isAdmin } = req.body;
+  const { username, password, is_admin } = req.body;
 
   if (!username || !password) {
     return res.status(400).json({ error: "Username and password required" });
@@ -74,7 +75,7 @@ app.post('/register', async (req, res) => {
       `INSERT INTO users (username, password, is_admin) 
        VALUES ($1, $2, $3) 
        RETURNING id, username, is_admin`,
-      [username, hashedPassword, isAdmin || false]
+      [username, hashedPassword, is_admin || false]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -102,30 +103,30 @@ app.post('/login', async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: user.id, isAdmin: user.is_admin },
+      { id: user.id, is_admin: user.is_admin },
       JWT_SECRET,
     );
 
-    res.json({ token, username: user.username, isAdmin: user.is_admin });
+    res.json({ token, username: user.username, is_admin: user.is_admin });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Login failed" });
   }
 });
 
-// ======================
-// TASK ROUTES (PROTECTED)
-// ======================
-// Get all tasks (admin) or user's tasks (regular user)
+
+// Protected route: Get all tasks (admin) or user's tasks (regular user)
 app.get('/tasks', authenticate, async (req, res) => {
   try {
-    const query = 'SELECT * FROM tasks'
-    
-    const { rows } = await pool.query(query);
+    const { rows } = await pool.query(
+      req.user.is_admin 
+        ? 'SELECT * FROM tasks'             // Admin sees all
+        : 'SELECT * FROM tasks WHERE user_id = $1', // User sees their own
+      req.user.is_admin ? [] : [req.user.id]
+    );
     res.json(rows);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to fetch tasks" });
+    res.status(500).json({ error: 'Failed to fetch tasks' });
   }
 });
 
@@ -199,5 +200,17 @@ app.delete('/tasks/:id', async (req, res) => {
   }
 });
 
-
+// DELETE a user by ID (DELETE /users/:id)
+app.delete('/users/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const { rows } = await pool.query('DELETE FROM users WHERE id = $1 RETURNING *', [id]);
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.status(204).send(); // 204 = No Content
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete users' });
+  }
+});
 
